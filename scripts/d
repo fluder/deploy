@@ -1,0 +1,3 @@
+#!/bin/python
+from deploy import main
+main()

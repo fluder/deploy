@@ -1,0 +1,6 @@
+containers:
+  gateway:
+    build: 3rdparty/gateway
+    expose:
+      4020: "{{ gateway_port }}"
+    privileged: yes
