@@ -103,13 +103,13 @@ def deploy_prod_bootstrap(stack, env, instance):
         env.run("hostname %s" % str(instance))
         env.reboot()
 
-    print(" - Checking swap")
-    if not env.run("mount | grep swap", hide=True, ignore_errors=True)["stdout"].strip():
-        print(" - Setting up swap")
-        env.run("fallocate -l 2G /swapfile")
-        env.run("chmod 600 /swapfile")
-        env.run("mkswap /swapfile")
-        env.run("swapon /swapfile")
+    #print(" - Checking swap")
+    # if not env.run("mount | grep swap", hide=True, ignore_errors=True)["stdout"].strip():
+    #     print(" - Setting up swap")
+    #     env.run("fallocate -l 2G /swapfile")
+    #     env.run("chmod 600 /swapfile")
+    #     env.run("mkswap /swapfile")
+    #     env.run("swapon /swapfile")
 
     print(" - Checking for docker")
     if "command not found" in env.run("docker --version", hide=True, ignore_errors=True)["stderr"]:
