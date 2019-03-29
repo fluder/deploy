@@ -104,7 +104,7 @@ def deploy_prod_bootstrap(stack, env, instance):
         env.reboot()
 
     print(" - Checking swap")
-    if not env.run("mount | grep swap", hide=True)["stdout"].strip():
+    if not env.run("mount | grep swap", hide=True, ignore_errors=True)["stdout"].strip():
         print(" - Setting up swap")
         env.run("fallocate -l 2G /swapfile")
         env.run("chmod 600 /swapfile")
