@@ -134,7 +134,7 @@ def deploy_prod_bootstrap(stack, env, instance):
     if instance.is_root:
         # Master
         if "No such file" in env.run("stat ~/.kube", hide=True, ignore_errors=True)["stderr"]:
-            env.run("kubeadm init --token 40iy4i.mg57avb3c9ih1fob --token-ttl 0 --pod-network-cidr=10.244.0.0/16 --ignore-preflight-errors=NumCPU")
+            env.run("kubeadm init --token 40iy4i.mg57avb3c9ih1fob --token-ttl 0 --pod-network-cidr=10.244.0.0/16 --ignore-preflight-errors=NumCPU,swap")
             env.run("mkdir -p $HOME/.kube")
             env.run("cp -i /etc/kubernetes/admin.conf $HOME/.kube/config")
             env.run("kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml")
