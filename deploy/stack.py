@@ -41,7 +41,7 @@ class Instance:
 
 class Container:
     def __init__(self, value, build=None, docker_file=None, run=None, volumes=None, env=None, expose=None,
-                 is_privileged=False, network=None, mem_imit=None):
+                 is_privileged=False, network=None, mem_limit=None):
         self.value = value
         self.instance = None
         self.build = build
@@ -52,7 +52,7 @@ class Container:
         self.expose = expose or {}
         self.is_privileged = is_privileged
         self.network = network or "overlay"
-        self.mem_limit = mem_imit or "128M"
+        self.mem_limit = mem_limit or "128M"
 
     def __str__(self):
         return self.value
@@ -121,7 +121,8 @@ class Stack:
                         env=container_opts.get("env"),
                         expose=container_opts.get("expose"),
                         is_privileged=container_opts.get("is_privileged") is True,
-                        network=container_opts.get("network")
+                        network=container_opts.get("network"),
+                        mem_limit=container_opts.get("mem_limit")
                     )
                 instances[instance] = Instance(
                     value=instance,

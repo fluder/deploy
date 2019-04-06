@@ -80,11 +80,13 @@ class DockerManager:
 
     def pull_image(self, name):
         self.env.run("docker pull %s" % name)
+        return self.get_images(True)[name]
 
     def build_image(self, path, name, docker_file="Dockerfile"):
         self.env.run(
             "docker build --label \"STACK_ID=%s\" -t %s -f %s/%s %s" % (self.stack.vars["stack_id"], name, path, docker_file, path)
         )
+        return self.get_images(True)[name]
 
     def remove_image(self, name):
         self.env.run("docker rmi %s" % name)

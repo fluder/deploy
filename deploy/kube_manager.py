@@ -3,6 +3,8 @@ import shlex
 
 from time import sleep
 
+from copy import copy
+
 
 class KubeManager:
     def __init__(self, stack, env):
@@ -10,12 +12,19 @@ class KubeManager:
         self.env = env
 
     def get_containers(self):
-        result = json.loads(self.env.run("kubectl get pods -o json", hide=True)["stdout"])
+        result = json.loads(self.env.run("kubectl get pods --all-namespaces -o json", hide=True)["stdout"])
 
-        return {
-            item["metadata"]["name"]: item["spec"]["containers"][0]
-            for item in result["items"]
-        }
+        res = {}
+        for item in result["items"]:
+            name = "%s.%s" % (item["metadata"]["name"], item["metadata"]["namespace"])
+            res[name] = copy(item["spec"]["containers"][0])
+            res[name]["metadata"] = copy(item["metadata"])
+            if "containerStatuses" in item["status"]:
+                res[name]["status"] = copy(item["status"]["containerStatuses"][0])
+            else:
+                res[name]["status"] = None
+
+        return res
 
     def add_container(self, image, name, instance, privileged=False, network=None, expose=None, restart="always", volumes=None,
                       envs=None, nonce=None, host_network=False, mem_limit=None, oneshot=False, cmd=None):
@@ -28,7 +37,7 @@ class KubeManager:
                 "namespace": name.rsplit(".", 1)[1],
                 "labels": {
                     "subdomain": "true",
-                    "name": name.rsplit(".", 1)[0]
+                    "name": name.rsplit(".", 1)[0],
                 }
             },
             "spec": {
@@ -69,6 +78,8 @@ class KubeManager:
             },
             "status": {}
         }
+        if nonce:
+            desc["metadata"]["labels"]["nonce"] = nonce
         if oneshot:
             desc["spec"]["restartPolicy"] = "Never"
         if cmd:

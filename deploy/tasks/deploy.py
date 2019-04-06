@@ -5,24 +5,27 @@ from deploy.docker_manager import DockerManager
 from deploy.environment import LocalEnvironment, EnvironmentFactory
 from deploy.kube_manager import KubeManager
 from deploy.utils import get_nonce, wait_for_cloud_init
+from deploy.tasks.log import log
 
 
 def deploy(mode, stack, service):
     print("\033[1;37;40mDeploying service %s @ %s\033[0m" % (service, mode))
     if mode == "dev":
-        return deploy_dev(stack, service)
+        deploy_dev(stack, service)
     elif mode == "prod":
-        return deploy_prod(stack, service)
+        deploy_prod(stack, service)
 
-    openvpn_j2_template = Template(pkg_resources.resource_string("deploy", "templates/gateway.ovpn.j2"))
-    rendered_data = None
-    if mode == "prod":
-        rendered_data = openvpn_j2_template.render(mode=mode, instances=[x.public_ip for x in stack.get_instances().values()])
-    elif mode == "dev":
-        rendered_data = openvpn_j2_template.render(mode=mode, instances=["127.0.0.1"])
+    # openvpn_j2_template = Template(pkg_resources.resource_string("deploy", "templates/gateway.ovpn.j2"))
+    # rendered_data = None
+    # if mode == "prod":
+    #     rendered_data = openvpn_j2_template.render(mode=mode, instances=[x.public_ip for x in stack.get_instances().values()])
+    # elif mode == "dev":
+    #     rendered_data = openvpn_j2_template.render(mode=mode, instances=["127.0.0.1"])
+    #
+    # if rendered_data:
+    #     open("ovpn_%s.ovpn" % mode, "w").write(rendered_data)
 
-    if rendered_data:
-        open("ovpn_%s.ovpn" % mode, "w").write(rendered_data)
+    log(mode, stack, service)
 
 
 def deploy_dev(stack, service):
@@ -79,13 +82,13 @@ def deploy_prod(stack, service):
 
     print("\033[1;37;40mBuilding docker image\033[0m")
     env = EnvironmentFactory.get_remote(stack[service].instance.public_ip)
-    deploy_prod_build_docker_images(stack, env, stack[service])
+    image = deploy_prod_build_docker_images(stack, env, stack[service])
 
     print("\033[1;37;40mDeploying service\033[0m")
     root_instance = stack.get_root_instance(stack[service].instance.domain)
     env = EnvironmentFactory.get_remote(root_instance.public_ip)
     deploy_prod_initialize_kube_namespaces(stack, env, root_instance.domain)
-    deploy_prod_service(stack, env, stack[service])
+    deploy_prod_service(stack, env, stack[service], image)
 
 
 def deploy_prod_bootstrap(stack, env, instance):
@@ -175,13 +178,19 @@ def deploy_prod_build_docker_images(stack, env, container):
     docker_manager = DockerManager(stack, env)
 
     print(" - Syncing project files")
-    env.run("mkdir -p /home/ubuntu/serv_files")
+    env.run("mkdir -p /home/ubuntu/serv_files_orig")
     env.sync(
         local_dir=".",
         exclude=[".git"],
-        remote_dir="/home/ubuntu/serv_files",
+        remote_dir="/home/ubuntu/serv_files_orig",
         delete=True
     )
+    env.run("rm -R /home/ubuntu/serv_files ")
+    env.run("cp -R /home/ubuntu/serv_files_orig /home/ubuntu/serv_files")
+    if container.build:
+        modules = env.run("ls /home/ubuntu/serv_files_orig/_common/", hide=True, ignore_errors=True)["stdout"].split("\n")
+        for module in modules:
+            env.run("cp -R /home/ubuntu/serv_files_orig/_common/%s/%s /home/ubuntu/serv_files/%s/%s" % (module, module, container.build, module))
     env.cd("/home/ubuntu/serv_files")
 
     print(" - Creating volume directories")
@@ -190,12 +199,12 @@ def deploy_prod_build_docker_images(stack, env, container):
 
     print(" - Building docker image")
     if container.build:
-        docker_manager.build_image(container.build, str(container), docker_file=container.docker_file)
+        return docker_manager.build_image(container.build, str(container), docker_file=container.docker_file)
     elif container.run:
-        docker_manager.pull_image(container.run)
+        return docker_manager.pull_image(container.run)
 
 
-def deploy_prod_service(stack, env, container):
+def deploy_prod_service(stack, env, container, image):
     print(" - Creating kubernetes pod")
     kube_manager = KubeManager(stack, env)
 
@@ -214,6 +223,17 @@ def deploy_prod_service(stack, env, container):
         "mem_limit": container.mem_limit
     }
     nonce = get_nonce(add_container_parms)
-    if container not in kube_manager.get_containers():
+    containers = kube_manager.get_containers()
+    if (
+        str(container) in containers and (
+            containers[str(container)]["metadata"]["labels"].get("nonce") != nonce or
+            not containers[str(container)]["status"] or
+            not containers[str(container)]["status"]["imageID"].startswith("docker://sha256:%s" % image["Id"])
+        )
+    ):
+        kube_manager.stop(str(container))
+
+    containers = kube_manager.get_containers()
+    if str(container) not in containers:
         add_container_parms["nonce"] = nonce
         kube_manager.add_container(**add_container_parms)
