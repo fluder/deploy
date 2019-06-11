@@ -32,9 +32,13 @@ def wait_for_port(address, port=22):
 
 
 def wait_for_cloud_init(env):
-    while not env.run(
-        "ls /var/lib/cloud/instance/ | grep boot-finished",
-        hide=True
-    )["stdout"].strip():
+    while True:
+        res = env.run(
+            "ls /var/lib/cloud/instance/ | grep boot-finished",
+            hide=True,
+            ignore_errors=True
+        )
+        if "No such file" in res["stderr"] or res["stdout"].strip():
+            break
         print("Still waiting for cloud-init")
         time.sleep(5)

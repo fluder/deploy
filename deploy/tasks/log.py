@@ -4,6 +4,9 @@ from deploy.docker_manager import DockerManager
 
 
 def log(mode, stack, service, tail=None):
+    if len(service.split(".")) != 3:
+        print("Logging service is not supported yet")
+        return
     print("\033[1;37;40mGetting logs of service %s @ %s\033[0m" % (service, mode))
     tail = tail or 100
     if mode == "dev":
@@ -19,6 +22,7 @@ def log_dev(stack, service, tail):
 
 
 def log_prod(stack, service, tail):
-    env = EnvironmentFactory.get_remote(stack[service].instance.public_ip)
+    root_instance = stack.get_root_instance(stack[service].instance.domain)
+    env = EnvironmentFactory.get_remote(root_instance.public_ip)
     kube_manager = KubeManager(stack, env)
     kube_manager.logs(service, tail=tail)

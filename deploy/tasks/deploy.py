@@ -75,24 +75,36 @@ def deploy_dev(stack, service):
 
 
 def deploy_prod(stack, service):
-    for instance in stack.get_instances():
-        print("\033[1;37;40mBootstraping %s (%s)\033[0m" % (str(instance), instance.public_ip))
-        env = EnvironmentFactory.get_remote(instance.public_ip)
-        deploy_prod_bootstrap(stack, env, instance)
+    if len(service.split(".")) == 2:
+        # Deploying service
+        root_instance = stack.get_root_instance(stack[service].domain)
+        root_env = EnvironmentFactory.get_remote(root_instance.public_ip)
+        kube_manager = KubeManager(stack, root_env)
+        kube_manager.add_service(service, ports=stack[service].ports, expose=stack[service].expose)
+        for container in stack[service].containers:
+            kube_manager.label_container(container, "service-%s" % service.rsplit(".", 1)[0], "true")
+    elif len(service.split(".")) == 3:
+        # for instance in stack.get_instances():
+        #     print("\033[1;37;40mBootstraping %s (%s)\033[0m" % (str(instance), instance.public_ip))
+        #     env = EnvironmentFactory.get_remote(instance.public_ip)
+        #     deploy_prod_bootstrap(stack, env, instance)
+        # Deploying container
+        root_instance = stack.get_root_instance(stack[service].instance.domain)
 
-    print("\033[1;37;40mBuilding docker image\033[0m")
-    env = EnvironmentFactory.get_remote(stack[service].instance.public_ip)
-    image = deploy_prod_build_docker_images(stack, env, stack[service])
+        print("\033[1;37;40mBuilding docker image\033[0m")
+        env = EnvironmentFactory.get_remote(stack[service].instance.public_ip)
+        root_env = EnvironmentFactory.get_remote(root_instance.public_ip)
+        image = deploy_prod_build_docker_images(stack, env, stack[service])
 
-    print("\033[1;37;40mDeploying service\033[0m")
-    root_instance = stack.get_root_instance(stack[service].instance.domain)
-    env = EnvironmentFactory.get_remote(root_instance.public_ip)
-    deploy_prod_initialize_kube_namespaces(stack, env, root_instance.domain)
-    deploy_prod_service(stack, env, stack[service], image)
+        print("\033[1;37;40mDeploying service\033[0m")
+        env = EnvironmentFactory.get_remote(root_instance.public_ip)
+        deploy_prod_initialize_kube_namespaces(stack, env, root_instance.domain)
+        deploy_prod_service(stack, env, stack[service], image)
 
 
 def deploy_prod_bootstrap(stack, env, instance):
     wait_for_cloud_init(env)
+    env.run("apt-get install -y software-properties-common", hide=True)
     print(" - Checking for curl")
     if "command not found" in env.run("curl", hide=True, ignore_errors=True)["stderr"]:
         env.run("apt-get install -y curl")
@@ -132,7 +144,7 @@ def deploy_prod_bootstrap(stack, env, instance):
         env.run("curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add")
         env.run("echo \"deb http://apt.kubernetes.io/ kubernetes-xenial main\" > /etc/apt/sources.list.d/kubernetes.list")
         env.run("apt-get update")
-        env.run("apt-get install -y kubelet kubeadm kubectl kubernetes-cni")
+        env.run("apt-get install -y kubelet=1.11.0-00 kubeadm=1.11.0-00 kubectl=1.11.0-00 kubernetes-cni=0.6.0-00")
 
     if instance.is_root:
         # Master
@@ -145,8 +157,8 @@ def deploy_prod_bootstrap(stack, env, instance):
             env.run("kubectl taint nodes %s node-role.kubernetes.io/master:NoSchedule-" % str(instance),)
     else:
         # Slave
-        if "No such file" in env.run("stat ~/.kube_slave", hide=True, ignore_errors=True)["etderr"]:
-            env.run("kubeadm join %s:6443 --token 40iy4i.mg57avb3c9ih1fob --discovery-token-unsafe-skip-ca-verification" % (stack.get_root_instance(instance.domain).public_ip,))
+        if "No such file" in env.run("stat ~/.kube_slave", hide=True, ignore_errors=True)["stderr"]:
+            env.run("kubeadm join %s:6443 --token 40iy4i.mg57avb3c9ih1fob --discovery-token-unsafe-skip-ca-verification --ignore-preflight-errors=NumCPU,SystemVerification,swap" % (stack.get_root_instance(instance.domain).public_ip,))
             env.run("touch ~/.kube_slave")
 
 
@@ -181,11 +193,11 @@ def deploy_prod_build_docker_images(stack, env, container):
     env.run("mkdir -p /home/ubuntu/serv_files_orig")
     env.sync(
         local_dir=".",
-        exclude=[".git"],
+        exclude=[".git"] + stack.vars.get("rsync_exclude", "").split(";"),
         remote_dir="/home/ubuntu/serv_files_orig",
         delete=True
     )
-    env.run("rm -R /home/ubuntu/serv_files ")
+    env.run("rm -R /home/ubuntu/serv_files", ignore_errors=True)
     env.run("cp -R /home/ubuntu/serv_files_orig /home/ubuntu/serv_files")
     if container.build:
         modules = env.run("ls /home/ubuntu/serv_files_orig/_common/", hide=True, ignore_errors=True)["stdout"].split("\n")
@@ -237,3 +249,8 @@ def deploy_prod_service(stack, env, container, image):
     if str(container) not in containers:
         add_container_parms["nonce"] = nonce
         kube_manager.add_container(**add_container_parms)
+        for service in container.instance.domain.services.values():
+            for _container in service.containers:
+                if _container == str(container):
+                    kube_manager.label_container(str(container), "service-%s" % str(service).rsplit(".", 1)[0], "true")
+

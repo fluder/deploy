@@ -27,7 +27,7 @@ class KubeManager:
         return res
 
     def add_container(self, image, name, instance, privileged=False, network=None, expose=None, restart="always", volumes=None,
-                      envs=None, nonce=None, host_network=False, mem_limit=None, oneshot=False, cmd=None):
+                      envs=None, nonce=None, host_network=False, mem_limit=None, oneshot=False, cmd=None, service=None):
         #env.run("kubectl label nodes %s node=%s" % (instance, instance))
         desc = {
             "kind": "Pod",
@@ -78,6 +78,8 @@ class KubeManager:
             },
             "status": {}
         }
+        if service:
+            desc["metadata"]["labels"]["service"] = service
         if nonce:
             desc["metadata"]["labels"]["nonce"] = nonce
         if oneshot:
@@ -139,6 +141,72 @@ class KubeManager:
         # env.run("docker rm %s" % name, show=True)
         pass
 
+
+    def add_service(self, name, ports, expose):
+        if ports:
+            desc = {
+                "kind": "Service",
+                "apiVersion": "v1",
+                "metadata": {
+                    "name": "%s" % name.rsplit(".", 1)[0],
+                    "namespace": name.rsplit(".", 1)[1]
+                },
+                "spec": {
+                    "selector": {
+                        "service-%s" % name.rsplit(".", 1)[0]: "true"
+                    },
+                    "ports": [
+                        {
+                            "protocol": "TCP",
+                            "port": int(port),
+                            "targetPort": int(target_port)
+                        }
+                        for target_port, port in ports.items()
+                    ]
+                }
+            }
+            self.env.run("cat /dev/null > /tmp/svc.json", hide=True)
+            self.env.put(json.dumps(desc), "/tmp/svc.json")
+            cmd = "kubectl create -f /tmp/svc.json"
+            self.env.run("kubectl delete svc %s --namespace=%s" % (name.rsplit(".", 1)[0], name.rsplit(".", 1)[1]), ignore_errors=True)
+            self.env.run(cmd, ignore_errors=True)
+        if expose:
+            desc = {
+                "kind": "Service",
+                "apiVersion": "v1",
+                "metadata": {
+                    "name": "%s-expose" % name.rsplit(".", 1)[0],
+                    "namespace": name.rsplit(".", 1)[1]
+                },
+                "spec": {
+                    "selector": {
+                        "service-%s" % name.rsplit(".", 1)[0]: "true"
+                    },
+                    "ports": [
+                        {
+                            "protocol": "TCP",
+                            "port": int(port),
+                            "targetPort": int(target_port)
+                        }
+                        for target_port, port in expose.items()
+                    ],
+                    "externalIPs": [ self.env.hostname ]
+                }
+            }
+            print(desc)
+            self.env.run("cat /dev/null > /tmp/svc.json", hide=True)
+            self.env.put(json.dumps(desc), "/tmp/svc.json")
+            cmd = "kubectl create -f /tmp/svc.json"
+            self.env.run("kubectl delete svc %s-expose --namespace=%s" % (name.rsplit(".", 1)[0], name.rsplit(".", 1)[1]), ignore_errors=True)
+            self.env.run(cmd, ignore_errors=True)
+
+    def label_container(self, container, key, value):
+        self.env.run("kubectl label pod %s --namespace=%s %s=%s --overwrite" % (
+            container.rsplit(".", 1)[0],
+            container.rsplit(".", 1)[1],
+            key,
+            value
+        ), ignore_errors=True)
 
     def logs(self, service, tail=100):
         while True:

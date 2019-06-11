@@ -25,9 +25,9 @@ def main():
 
     stack = Stack(
         mode,
-        vault_file="vault.yml",
-        stack_vars_file="stack_vars.yml",
-        stack_file="stack.yml",
+        vault_file="_stack/vault.yml",
+        stack_vars_file="_stack/vars.yml",
+        stack_file="_stack/stack.yml",
         instance_common_file="templates/instance_common.yml"
     )
 
