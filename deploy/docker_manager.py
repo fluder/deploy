@@ -106,7 +106,7 @@ class DockerManager:
         }
 
     def add_container(self, image, name, privileged=False, network=None, expose=None, restart="always", volumes=None,
-                      envs=None, nonce=None):
+                      envs=None, nonce=None, cmd=None, oneshot=False):
         env_string = ""
         for env_name, env_value in (envs or {}).items():
             env_string += "-e %s " % env_name
@@ -118,22 +118,26 @@ class DockerManager:
         for port_in_container, port_on_instance in (expose or {}).items():
             expose_string += "-p %s:%s " % (port_on_instance, port_in_container)
 
-        cmd = "docker run -d --label \"STACK_ID=%s\" --log-driver=journald " % self.stack.vars["stack_id"]
+        _cmd = "docker run -d --label \"STACK_ID=%s\" --log-driver=journald " % self.stack.vars["stack_id"]
         if nonce:
-            cmd += "--label \"NONCE=%s\" " % nonce
-        cmd += "--name %s " % name
+            _cmd += "--label \"NONCE=%s\" " % nonce
+        _cmd += "--name %s " % name
         if network:
-            cmd += "--network %s " % network
-        if restart:
-            cmd += "--restart %s " % restart
+            _cmd += "--network %s " % network
+        if restart and not oneshot:
+            _cmd += "--restart %s " % restart
         if privileged:
-            cmd += "--privileged "
-        cmd += volume_string
-        cmd += env_string
-        cmd += expose_string
-        cmd += image
+            _cmd += "--privileged "
+        if oneshot:
+            _cmd += "--rm "
+        _cmd += volume_string
+        _cmd += env_string
+        _cmd += expose_string
+        _cmd += image
+        if cmd:
+            _cmd += " " + cmd
 
-        self.env.run(cmd)
+        self.env.run(_cmd)
 
     def remove_container(self, name):
         self.stop_container(name)
@@ -150,7 +154,12 @@ class DockerManager:
         self.start_container(name)
 
     def logs(self, name, tail=None):
-        self.env.run("docker logs --tail %d -t %s -f" % (int(tail) if tail else 100, name))
+        while True:
+            try:
+                self.env.run("docker logs --tail %d -t %s -f" % (int(tail) if tail else 100, name))
+                break
+            except Exception:
+                sleep(1)
 
     def inspect(self, name):
         self.env.run("docker inspect %s" % name)

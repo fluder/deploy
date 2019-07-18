@@ -1,4 +1,5 @@
 import pkg_resources
+import tempfile
 from jinja2 import Template
 
 from deploy.docker_manager import DockerManager
@@ -45,7 +46,13 @@ def deploy_dev(stack, service):
     image_name = None
     if container.build:
         image_name = str(container)
-        docker_manager.build_image(container.build, str(container), docker_file=container.docker_file)
+        tmp_dir = tempfile.mktemp()
+        local_env.run("cp -R %s %s" % (container.build, tmp_dir))
+        modules = local_env.run("ls _common/", hide=True)["stdout"].split("\n")
+        for module in modules:
+            local_env.run("cp -R _common/%s/%s %s" % (module, module, tmp_dir))
+        docker_manager.build_image(tmp_dir, str(container), docker_file=container.docker_file)
+        local_env.run("rm -R %s" % tmp_dir)
     elif container.run:
         image_name = container.run
         docker_manager.pull_image(container.run)

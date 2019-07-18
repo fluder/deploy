@@ -58,7 +58,7 @@ class Container:
         self.expose = expose or {}
         self.is_privileged = is_privileged
         self.network = network or "overlay"
-        self.mem_limit = mem_limit or "128M"
+        self.mem_limit = mem_limit or "512M"
 
     def __str__(self):
         return self.value
