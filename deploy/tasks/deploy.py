@@ -91,10 +91,10 @@ def deploy_prod(stack, service):
         for container in stack[service].containers:
             kube_manager.label_container(container, "service-%s" % service.rsplit(".", 1)[0], "true")
     elif len(service.split(".")) == 3:
-        # for instance in stack.get_instances():
-        #     print("\033[1;37;40mBootstraping %s (%s)\033[0m" % (str(instance), instance.public_ip))
-        #     env = EnvironmentFactory.get_remote(instance.public_ip)
-        #     deploy_prod_bootstrap(stack, env, instance)
+        for instance in stack.get_instances():
+            print("\033[1;37;40mBootstraping %s (%s)\033[0m" % (str(instance), instance.public_ip))
+            env = EnvironmentFactory.get_remote(instance.public_ip)
+            deploy_prod_bootstrap(stack, env, instance)
         # Deploying container
         root_instance = stack.get_root_instance(stack[service].instance.domain)
 
@@ -156,7 +156,7 @@ def deploy_prod_bootstrap(stack, env, instance):
     if instance.is_root:
         # Master
         if "No such file" in env.run("stat ~/.kube", hide=True, ignore_errors=True)["stderr"]:
-            env.run("kubeadm init --token 40iy4i.mg57avb3c9ih1fob --token-ttl 0 --pod-network-cidr=10.244.0.0/16 --ignore-preflight-errors=NumCPU,swap")
+            env.run("kubeadm init --token 40iy4i.mg57avb3c9ih1fob --token-ttl 0 --pod-network-cidr=10.244.0.0/16 --ignore-preflight-errors=NumCPU,swap,SystemVerification")
             env.run("mkdir -p $HOME/.kube")
             env.run("cp -i /etc/kubernetes/admin.conf $HOME/.kube/config")
             env.run("kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml")
