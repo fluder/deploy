@@ -80,7 +80,7 @@ class DockerManager:
 
     def pull_image(self, name):
         self.env.run("docker pull %s" % name)
-        return self.get_images(True)[name]
+        return self.get_images(True)[name.split(':')[0]]
 
     def build_image(self, path, name, docker_file="Dockerfile"):
         self.env.run(
