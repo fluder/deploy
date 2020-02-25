@@ -52,7 +52,7 @@ def deploy_dev(stack, service):
         for module in modules:
             local_env.run("cp -R _common/%s/%s %s" % (module, module, tmp_dir))
         docker_manager.build_image(tmp_dir, str(container), docker_file=container.docker_file)
-        local_env.run("rm -R %s" % tmp_dir)
+        local_env.run("rm -Rf %s" % tmp_dir)
     elif container.run:
         image_name = container.run
         docker_manager.pull_image(container.run)
