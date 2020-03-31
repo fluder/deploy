@@ -93,7 +93,7 @@ class KubeManager:
                     "name": volume_on_instance.replace(".", "-").replace("_", "-").replace("/", ""),
                     "hostPath": {
                         "path": ("/srv/volumes/" + volume_on_instance.replace(".", "-").replace("_", "-")) if "/" not in volume_on_instance else volume_on_instance,
-                        "type": "Directory"
+                        "type": ""
                     }
                 }
                 for volume_in_container, volume_on_instance in volumes.items()
