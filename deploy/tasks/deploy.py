@@ -85,7 +85,7 @@ def deploy_prod(stack, service):
     if len(service.split(".")) == 2:
         # Deploying service
         root_instance = stack.get_root_instance(stack[service].domain)
-        root_env = EnvironmentFactory.get_remote(root_instance.public_ip)
+        root_env = EnvironmentFactory.get_remote(root_instance.public_ip, root_instance.public_port)
         kube_manager = KubeManager(stack, root_env)
         kube_manager.add_service(service, ports=stack[service].ports, expose=stack[service].expose)
         for container in stack[service].containers:
@@ -93,18 +93,17 @@ def deploy_prod(stack, service):
     elif len(service.split(".")) == 3:
         for instance in stack.get_instances():
             print("\033[1;37;40mBootstraping %s (%s)\033[0m" % (str(instance), instance.public_ip))
-            env = EnvironmentFactory.get_remote(instance.public_ip)
+            env = EnvironmentFactory.get_remote(instance.public_ip, instance.public_port)
             deploy_prod_bootstrap(stack, env, instance)
         # Deploying container
         root_instance = stack.get_root_instance(stack[service].instance.domain)
 
         print("\033[1;37;40mBuilding docker image\033[0m")
-        env = EnvironmentFactory.get_remote(stack[service].instance.public_ip)
-        root_env = EnvironmentFactory.get_remote(root_instance.public_ip)
+        env = EnvironmentFactory.get_remote(stack[service].instance.public_ip, stack[service].instance.public_port)
         image = deploy_prod_build_docker_images(stack, env, stack[service])
 
         print("\033[1;37;40mDeploying service\033[0m")
-        env = EnvironmentFactory.get_remote(root_instance.public_ip)
+        env = EnvironmentFactory.get_remote(root_instance.public_ip, root_instance.public_port)
         deploy_prod_initialize_kube_namespaces(stack, env, root_instance.domain)
         deploy_prod_service(stack, env, stack[service], image)
 
@@ -151,7 +150,7 @@ def deploy_prod_bootstrap(stack, env, instance):
         env.run("curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add")
         env.run("echo \"deb http://apt.kubernetes.io/ kubernetes-xenial main\" > /etc/apt/sources.list.d/kubernetes.list")
         env.run("apt-get update")
-        env.run("apt-get install -y kubelet=1.11.0-00 kubeadm=1.11.0-00 kubectl=1.11.0-00 kubernetes-cni=0.6.0-00")
+        env.run("apt-get install -y kubelet=1.19.0-00 kubeadm=1.19.0-00 kubectl=1.19.0-00 kubernetes-cni=0.8.6-00")
 
     if instance.is_root:
         # Master
@@ -161,6 +160,7 @@ def deploy_prod_bootstrap(stack, env, instance):
             env.run("cp -i /etc/kubernetes/admin.conf $HOME/.kube/config")
             env.run("kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml")
             env.run("kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/k8s-manifests/kube-flannel-rbac.yml")
+            # env.run("kubectl -n kube-system apply -f https://raw.githubusercontent.com/coreos/flannel/bc79dd1505b0c8681ece4de4c0d86c5cd2643275/Documentation/kube-flannel.yml")
             env.run("kubectl taint nodes %s node-role.kubernetes.io/master:NoSchedule-" % str(instance),)
     else:
         # Slave

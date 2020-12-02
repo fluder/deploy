@@ -23,6 +23,6 @@ def log_dev(stack, service, tail):
 
 def log_prod(stack, service, tail):
     root_instance = stack.get_root_instance(stack[service].instance.domain)
-    env = EnvironmentFactory.get_remote(root_instance.public_ip)
+    env = EnvironmentFactory.get_remote(root_instance.public_ip, root_instance.public_port)
     kube_manager = KubeManager(stack, env)
     kube_manager.logs(service, tail=tail)

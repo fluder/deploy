@@ -129,7 +129,7 @@ class KubeManager:
                         name.rsplit(".", 1)[1],
                         name.rsplit(".", 1)[0].replace(".", "-"),
                         target_port,
-                        self.stack[instance].public_ip
+                        self.stack[instance].expose_ip or self.stack[instance].public_ip
                     ),
                     hide=True,
                     ignore_errors=True

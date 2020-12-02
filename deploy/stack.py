@@ -28,10 +28,15 @@ class Domain:
 
 
 class Instance:
-    def __init__(self, value, public_ip=None, is_root=False, volumes=None):
+    def __init__(self, value, expose_ip=None, public_ip=None, is_root=False, volumes=None):
         self.value = value
         self.domain = None
-        self.public_ip = public_ip
+        self.public_ip = public_ip.split(":")[0]
+        self.expose_ip = expose_ip
+        try:
+            self.public_port = int(public_ip.split(":")[1])
+        except IndexError:
+            self.public_port = 22
         self.is_root = is_root
         self.volumes = volumes or []
         self.containers = {}
@@ -207,6 +212,7 @@ class Stack:
                 instances[instance] = Instance(
                     value=instance,
                     public_ip=instance_opts.get("public_ip"),
+                    expose_ip=instance_opts.get("expose_ip"),
                     is_root=instance_opts.get("root") is True,
                     volumes=instance_opts.get("volumes")
                 )
