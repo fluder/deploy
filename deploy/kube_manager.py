@@ -1,5 +1,6 @@
 import json
 import shlex
+import hashlib
 
 from time import sleep
 
@@ -90,7 +91,7 @@ class KubeManager:
         if volumes:
             desc["spec"]["volumes"] = [
                 {
-                    "name": volume_on_instance.replace(".", "-").replace("_", "-").replace("/", ""),
+                    "name": hashlib.md5(volume_on_instance.replace(".", "-").replace("_", "-").replace("/", "").encode("utf8")).hexdigest(),
                     "hostPath": {
                         "path": ("/srv/volumes/" + volume_on_instance.replace(".", "-").replace("_", "-")) if "/" not in volume_on_instance else volume_on_instance,
                         "type": ""
@@ -101,7 +102,7 @@ class KubeManager:
             desc["spec"]["containers"][0]["volumeMounts"] = [
                 {
                     "mountPath": volume_in_container,
-                    "name": volume_on_instance.replace(".", "-").replace("_", "-").replace("/", "")
+                    "name": hashlib.md5(volume_on_instance.replace(".", "-").replace("_", "-").replace("/", "").encode("utf8")).hexdigest()
                 }
                 for volume_in_container, volume_on_instance in volumes.items()
             ]
