@@ -118,7 +118,7 @@ class DockerManager:
         for port_in_container, port_on_instance in (expose or {}).items():
             expose_string += "-p %s:%s " % (port_on_instance, port_in_container)
 
-        _cmd = "docker run -d --label \"STACK_ID=%s\" --log-driver=journald " % self.stack.vars["stack_id"]
+        _cmd = "docker run -d --label \"STACK_ID=%s\" " % self.stack.vars["stack_id"]
         if nonce:
             _cmd += "--label \"NONCE=%s\" " % nonce
         _cmd += "--name %s " % name
